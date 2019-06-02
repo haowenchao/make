@@ -6,13 +6,15 @@ include Makefile
 objs    := $(filter-out %/, $(obj-y))
 subdirs := $(foreach v, $(filter %/, $(obj-y)), $(patsubst %/, %, $(v)))
 subobjs := $(foreach v, $(subdirs), $(v)/built-in.o)
+depfile := $(foreach v, $(objs), .$(v).d)
+depfile := $(wildcard $(depfile))
 
 __build : $(target)
 
 PHONY += $(target)
 $(target) : $(subobjs) $(objs)
-	@echo "subobjs = $(subobjs)"
-	@echo "objs    = $(objs)"
+	@ rm -rf built-in.o
+	$(Q) $(LD) -r -o built-in.o $^
 
 $(subobjs) : $(subdirs)
 PHONY += $(subdirs)
@@ -20,15 +22,23 @@ $(subdirs) :
 	$(Q) $(MAKE) $(build) $@
 
 define cmd_cc_o_c = 
-	@echo "gcc -g -c -o $(2) $(1)"
+	$(CC) $(CFLAGS) -c -Wp,-MD,.$(1).d -o $(1) $(2)
 endef
 
 define quiet_cmd_cc_o_c = 
 	@echo "cc $(2) -o $(1)"
+	@$(CC) $(CFLAGS) -c -Wp,-MD,.$(1).d -o $(1) $(2)
 endef
 
-$(objs) :
-	$(call $(quiet)cmd_cc_o_c, $@, $<)
+ifneq ($(depfile), )
+  include $(depfile)
+endif
+
+%.o : %.c
+	$(call $(quiet)cmd_cc_o_c,$@,$<)
+
+%.o : %.S
+	$(call $(quiet)cmd_cc_o_c,$@,$<)
 
 .PHONY : $(PHONY)
 
